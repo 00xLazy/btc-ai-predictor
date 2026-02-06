@@ -1,6 +1,5 @@
 {
   "$schema": "https://railway.app/schema.json",
-  "name": "btc-ai-predictor",
   "build": {
     "builder": "NIXPACKS"
   },
