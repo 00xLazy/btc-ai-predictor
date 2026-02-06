@@ -1,0 +1,12 @@
+{
+  "$schema": "https://railway.app/schema.json",
+  "name": "btc-ai-predictor",
+  "build": {
+    "builder": "NIXPACKS"
+  },
+  "deploy": {
+    "startCommand": "node server.js",
+    "restartPolicy": "ON_FAILURE",
+    "healthcheckPath": "/api/stats"
+  }
+}
