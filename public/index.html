@@ -24,51 +24,109 @@
 </head>
 <body>
   <div class="container">
-    <h1>🤖 BTC AI Predictor - 4小时K线预测</h1>
+    <h1>BTC AI Predictor - 4小时K线预测</h1>
     <div class="stats" id="stats"></div>
-    <div class="chart-container"><canvas id="chart" height="300"></canvas></div>
     <div class="chart-container">
-      <table><thead><tr><th>时间</th><th>信号</th><th>置信</th><th>预测收盘</th><th>实际收盘</th><th>结果</th><th>误差</th></tr></thead>
-      <tbody id="tbody"></tbody></table>
+      <canvas id="chart" height="300"></canvas>
+    </div>
+    <div class="chart-container">
+      <table>
+        <thead>
+          <tr>
+            <th>时间</th>
+            <th>信号</th>
+            <th>置信</th>
+            <th>预测收盘</th>
+            <th>实际收盘</th>
+            <th>结果</th>
+            <th>误差</th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
     </div>
   </div>
   <script>
-    const API = '';
     let chart;
+    
     async function load() {
-      const [stats, comps] = await Promise.all([
-        fetch(API + '/api/stats').then(r => r.json()),
-        fetch(API + '/api/comparison').then(r => r.json())
-      ]);
-      document.getElementById('stats').innerHTML = `
-        <div class="stat-card"><div class="stat-value">${stats.totalPredictions}</div><div class="stat-label">总预测</div></div>
-        <div class="stat-card"><div class="stat-value">${stats.completedPredictions}</div><div class="stat-label">已完成</div></div>
-        <div class="stat-card"><div class="stat-value">${stats.accuracy}</div><div class="stat-label">准确率</div></div>
-        <div class="stat-card"><div class="stat-value">${stats.avgError}</div><div class="stat-label">平均误差</div></div>`;
-      
-      const ctx = document.getElementById('chart').getContext('2d');
-      const data = comps.slice(-20);
-      if (chart) chart.destroy();
-      chart = new Chart(ctx, {
-        type: 'line',
-        data: {
-          labels: data.map((_, i) => `预测${i+1}`),
-          datasets: [{ label: 'AI预测', data: data.map(c => c.prediction.close), borderColor: '#58a6ff' },
-                     { label: '实际', data: data.map(c => c.real?.close), borderColor: '#3fb950' }]
-        },
-        options: { responsive: true, plugins: { title: { display: true, text: '预测 vs 实际价格' } } }
-      });
-      
-      document.getElementById('tbody').innerHTML = data.slice().reverse().map(c => {
-        const p = c.prediction, s = p.signal.includes('买入') ? 'buy' : p.signal.includes('卖出') ? 'sell' : 'hold';
-        return `<tr><td>${new Date(p.time).toLocaleString('zh-CN')}</td><td class="${s}">${p.signal}</td>
-          <td>${(p.confidence * 100).toFixed(0)}%</td><td>$${p.close.toLocaleString()}<td>$${c.real?.close.toLocaleString() || '-'}</td>
-</td>
-                    <td class="${c.accuracy?.directionCorrect ? 'correct' : 'wrong'}">${c.accuracy ? (c.accuracy.directionCorrect ? '✅' : '❌') : '-'}</td>
-          <td>${c.accuracy ? c.accuracy.error.toFixed(2) + '%' : '-'}</td></tr>`;
-      }).join('');
+      try {
+        const [statsRes, compsRes] = await Promise.all([
+          fetch('/api/stats'),
+          fetch('/api/comparison')
+        ]);
+        
+        const stats = await statsRes.json();
+        const comps = await compsRes.json();
+        
+        document.getElementById('stats').innerHTML = `
+          <div class="stat-card">
+            <div class="stat-value">${stats.totalPredictions || 0}</div>
+            <div class="stat-label">总预测</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value">${stats.completedPredictions || 0}</div>
+            <div class="stat-label">已完成</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value">${stats.accuracy || 'N/A'}</div>
+            <div class="stat-label">准确率</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value">${stats.avgError || 'N/A'}</div>
+            <div class="stat-label">平均误差</div>
+          </div>
+        `;
+        
+        const data = comps.slice(-20);
+        
+        if (chart) chart.destroy();
+        
+        const ctx = document.getElementById('chart').getContext('2d');
+        chart = new Chart(ctx, {
+          type: 'line',
+          data: {
+            labels: data.map((_, i) => '预测' + (i + 1)),
+            datasets: [
+              { label: 'AI预测', data: data.map(c => c.prediction?.close), borderColor: '#58a6ff', tension: 0.1 },
+              { label: '实际价格', data: data.map(c => c.real?.close), borderColor: '#3fb950', tension: 0.1 }
+            ]
+          },
+          options: {
+            responsive: true,
+            plugins: {
+              title: { display: true, text: '预测 vs 实际价格' }
+            }
+          }
+        });
+        
+        let html = '';
+        data.slice().reverse().forEach(c => {
+          if (!c.prediction) return;
+          const p = c.prediction;
+          const signalClass = p.signal?.includes('买入') ? 'buy' : p.signal?.includes('卖出') ? 'sell' : 'hold';
+          const resultClass = c.accuracy?.directionCorrect ? 'correct' : 'wrong';
+          
+          html += '<tr>';
+          html += '<td>' + new Date(p.time).toLocaleString('zh-CN') + '</td>';
+          html += '<td class="' + signalClass + '">' + (p.signal || '-') + '</td>';
+          html += '<td>' + ((p.confidence || 0) * 100).toFixed(0) + '%</td>';
+          html += '<td>$' + (p.close?.toLocaleString() || '-') + '</td>';
+          html += '<td>$' + (c.real?.close?.toLocaleString() || '-') + '</td>';
+          html += '<td class="' + resultClass + '">' + (c.accuracy ? (c.accuracy.directionCorrect ? '正确' : '错误') : '-') + '</td>';
+          html += '<td>' + (c.accuracy ? c.accuracy.error.toFixed(2) + '%' : '-') + '</td>';
+          html += '</tr>';
+        });
+        
+        document.getElementById('tbody').innerHTML = html;
+        
+      } catch (e) {
+        console.error('Error loading data:', e);
+      }
     }
-    load(); setInterval(load, 30000);
+    
+    load();
+    setInterval(load, 10000);
   </script>
 </body>
 </html>
